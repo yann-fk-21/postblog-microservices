@@ -1,2 +1,7 @@
 /post-service/node_modules
 /post-service/uploads-images
+/post-service/.env
+
+/user-service/node_modules
+/user-service/uploads-images
+/user-service/.env
