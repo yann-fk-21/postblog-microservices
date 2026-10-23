@@ -4,16 +4,32 @@ const fastify = require('fastify')({
 require('dotenv').config();
 
 const dbConnect = require('./config/db.config');
+const authDbConnect = require('./config/auth-db.config');
 const postRoutes = require('./routes/post.route');
+const { startUserCheckClient } = require('./events/user-check.client');
+
+let stopUserCheckClient;
 
 fastify.register(dbConnect);
+fastify.register(authDbConnect);
+fastify.addHook('onReady', async () => {
+  stopUserCheckClient = await startUserCheckClient();
+});
+
 fastify.register(require('@fastify/multipart'), {
   limits: {
     files: 1,
     fileSize: 10 * 1024 * 1024,
   },
 });
+
 fastify.register(postRoutes);
+
+fastify.addHook('onClose', async () => {
+  if (stopUserCheckClient) {
+    await stopUserCheckClient();
+  }
+});
 
 const start = async () => {
   try {

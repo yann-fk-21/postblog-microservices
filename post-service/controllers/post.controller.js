@@ -1,6 +1,10 @@
-const { uploadImageToRemoteStorage } = require('../utils/utils');
+const {
+  uploadImageToRemoteStorage,
+  checkTokenValidity,
+} = require('../utils/utils');
 const { status } = require('http-status');
 const { Post } = require('../models/post.model');
+const { userExists } = require('../events/user-check.client');
 
 const returnError = (reply, error) => {
   return reply
@@ -42,10 +46,26 @@ const getPost = async (request, reply) => {
 
 const createPost = async (request, reply) => {
   try {
+    if (!(await checkTokenValidity(reply, request.headers.authorization))) {
+      return;
+    }
+
     const file = await request.file();
     const { title, description, userId } = Object.fromEntries(
       Object.entries(file.fields).map(([key, field]) => [key, field.value]),
     );
+
+    if (!userId) {
+      return reply
+        .code(status.BAD_REQUEST)
+        .send({ message: 'userId is required' });
+    }
+
+    if (!(await userExists(userId))) {
+      return reply
+        .code(status.BAD_REQUEST)
+        .send({ message: `User ${userId} does not exist` });
+    }
 
     const imageLink = await uploadImageToRemoteStorage(file);
 
@@ -70,7 +90,12 @@ const createPost = async (request, reply) => {
 
 const updatePost = async (request, reply) => {
   try {
+    if (!(await checkTokenValidity(reply, request.headers.authorization))) {
+      return;
+    }
+
     const { id } = request.params;
+
     const postData = request.body;
     const post = await Post.findByIdAndUpdate(id, postData);
 
@@ -86,6 +111,10 @@ const updatePost = async (request, reply) => {
 
 const deletePost = async (request, reply) => {
   try {
+    if (!(await checkTokenValidity(reply, request.headers.authorization))) {
+      return;
+    }
+
     const { id } = request.params;
     const post = await Post.findByIdAndDelete(id);
 

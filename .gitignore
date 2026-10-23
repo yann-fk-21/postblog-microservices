@@ -5,3 +5,8 @@
 /user-service/node_modules
 /user-service/uploads-images
 /user-service/.env
+
+/auth-service/node_modules
+/auth-service/uploads-images
+/auth-service/.env
+

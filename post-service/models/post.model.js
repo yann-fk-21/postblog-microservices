@@ -13,7 +13,7 @@ const PostSchema = new Schema(
     },
     imageLink: String,
     userId: {
-      type: String,
+      type: Number,
       required: [true, 'userId is required'],
       default: '1',
     },

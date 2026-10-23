@@ -4,6 +4,8 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { randomUUID } = require('node:crypto');
 const { status } = require('http-status');
+const { Auth } = require('../models/auth.model');
+const jwt = require('jsonwebtoken');
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads-images');
 
@@ -80,4 +82,56 @@ const uploadImageToRemoteStorage = async (file) => {
   }
 };
 
-module.exports = { uploadImageToLocalStorage, uploadImageToRemoteStorage };
+const checkTokenValidity = async (reply, token) => {
+  const unauthorized = () =>
+    reply.code(status.UNAUTHORIZED).send({ message: 'Invalid or expired token' });
+  const bearerToken =
+    typeof token === 'string' && token.startsWith('Bearer ')
+      ? token.slice('Bearer '.length).trim()
+      : null;
+
+  if (!bearerToken) {
+    unauthorized();
+    return false;
+  }
+
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+
+  try {
+    const claims = jwt.verify(bearerToken, secret);
+    if (!claims || typeof claims !== 'object' || !claims.sub) {
+      unauthorized();
+      return false;
+    }
+
+    const retrievedAuth = await Auth.findOne({
+      token: bearerToken,
+      userId: Number(claims.sub),
+    });
+    if (!retrievedAuth) {
+      unauthorized();
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      unauthorized();
+      return false;
+    }
+
+    const tokenError = new Error('Token validity checking failed');
+    tokenError.statusCode = status.INTERNAL_SERVER_ERROR;
+    tokenError.cause = error;
+    throw tokenError;
+  }
+};
+
+module.exports = {
+  uploadImageToLocalStorage,
+  uploadImageToRemoteStorage,
+  checkTokenValidity,
+};
