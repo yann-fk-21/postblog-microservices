@@ -5,6 +5,8 @@ const routes = async (fastify) => {
 
   fastify.get('/api/v1/posts/:id', postController.getPost);
 
+  fastify.get('/api/v1/posts/users/:userId', postController.getPostsByUserId);
+
   fastify.post('/api/v1/posts', postController.createPost);
 
   fastify.put('/api/v1/posts/:id', postController.updatePost);

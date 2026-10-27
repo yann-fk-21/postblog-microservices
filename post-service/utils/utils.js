@@ -82,9 +82,41 @@ const uploadImageToRemoteStorage = async (file) => {
   }
 };
 
+const checkAuthorization = async (token, userId) => {
+  try {
+    const bearerToken =
+      typeof token === 'string' && token.startsWith('Bearer ')
+        ? token.slice('Bearer '.length).trim()
+        : null;
+    if (!bearerToken) {
+      return false;
+    }
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    const claims = jwt.verify(bearerToken, secret);
+    return (
+      typeof claims === 'object' &&
+      claims !== null &&
+      claims.sub !== undefined &&
+      String(claims.sub) === String(userId)
+    );
+  } catch (error) {
+    const tokenError = new Error('User checking authorization failed');
+    tokenError.statusCode = status.INTERNAL_SERVER_ERROR;
+    tokenError.cause = error;
+    throw tokenError;
+  }
+};
+
 const checkTokenValidity = async (reply, token) => {
   const unauthorized = () =>
-    reply.code(status.UNAUTHORIZED).send({ message: 'Invalid or expired token' });
+    reply
+      .code(status.UNAUTHORIZED)
+      .send({ message: 'Invalid or expired token' });
   const bearerToken =
     typeof token === 'string' && token.startsWith('Bearer ')
       ? token.slice('Bearer '.length).trim()
@@ -118,7 +150,10 @@ const checkTokenValidity = async (reply, token) => {
 
     return true;
   } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+    if (
+      error.name === 'JsonWebTokenError' ||
+      error.name === 'TokenExpiredError'
+    ) {
       unauthorized();
       return false;
     }
@@ -134,4 +169,5 @@ module.exports = {
   uploadImageToLocalStorage,
   uploadImageToRemoteStorage,
   checkTokenValidity,
+  checkAuthorization,
 };

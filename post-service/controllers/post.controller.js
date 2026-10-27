@@ -1,6 +1,7 @@
 const {
   uploadImageToRemoteStorage,
   checkTokenValidity,
+  checkAuthorization,
 } = require('../utils/utils');
 const { status } = require('http-status');
 const { Post } = require('../models/post.model');
@@ -26,6 +27,44 @@ const getPosts = async (request, reply) => {
   }
 };
 
+const getPostsByUserId = async (request, reply) => {
+  try {
+    const { userId } = request.params;
+    const token = request.headers.authorization;
+
+    if (!(await checkTokenValidity(reply, request.headers.authorization))) {
+      return;
+    }
+
+    if (!(await userExists(userId))) {
+      return reply
+        .code(status.NOT_FOUND)
+        .send({ message: `user ${userId} not found` });
+    }
+
+    if (!(await checkAuthorization(token, userId))) {
+      return reply
+        .code(status.UNAUTHORIZED)
+        .send({ message: `User ${userId} is not authorized` });
+    }
+
+    const userPosts = await Post.find({ userId });
+
+    if (!userPosts) {
+      return reply
+        .code(status.NOT_FOUND)
+        .send({ message: 'User has not posts yet', posts: [] });
+    }
+
+    return reply.code(status.OK).send({
+      message: "user's posts has found successfully",
+      posts: userPosts,
+    });
+  } catch (error) {
+    returnError(reply, error);
+  }
+};
+
 const getPost = async (request, reply) => {
   const { id } = request.params;
   try {
@@ -46,7 +85,8 @@ const getPost = async (request, reply) => {
 
 const createPost = async (request, reply) => {
   try {
-    if (!(await checkTokenValidity(reply, request.headers.authorization))) {
+    const token = request.headers.authorization;
+    if (!(await checkTokenValidity(reply, token))) {
       return;
     }
 
@@ -65,6 +105,12 @@ const createPost = async (request, reply) => {
       return reply
         .code(status.BAD_REQUEST)
         .send({ message: `User ${userId} does not exist` });
+    }
+
+    if (!(await checkAuthorization(token, userId))) {
+      return reply
+        .code(status.UNAUTHORIZED)
+        .send({ message: `User ${userId} is not authorized` });
     }
 
     const imageLink = await uploadImageToRemoteStorage(file);
@@ -90,13 +136,19 @@ const createPost = async (request, reply) => {
 
 const updatePost = async (request, reply) => {
   try {
+    const { id } = request.params;
+    const postData = request.body;
+
     if (!(await checkTokenValidity(reply, request.headers.authorization))) {
       return;
     }
 
-    const { id } = request.params;
+    if (!(await checkAuthorization(token, userId))) {
+      return reply
+        .code(status.UNAUTHORIZED)
+        .send({ message: `User ${userId} is not authorized` });
+    }
 
-    const postData = request.body;
     const post = await Post.findByIdAndUpdate(id, postData);
 
     if (!post) {
@@ -111,11 +163,18 @@ const updatePost = async (request, reply) => {
 
 const deletePost = async (request, reply) => {
   try {
+    const { id } = request.params;
+
     if (!(await checkTokenValidity(reply, request.headers.authorization))) {
       return;
     }
 
-    const { id } = request.params;
+    if (!(await checkAuthorization(token, userId))) {
+      return reply
+        .code(status.UNAUTHORIZED)
+        .send({ message: `User ${userId} is not authorized` });
+    }
+
     const post = await Post.findByIdAndDelete(id);
 
     if (!post) {
@@ -130,4 +189,11 @@ const deletePost = async (request, reply) => {
   }
 };
 
-module.exports = { getPosts, createPost, getPost, updatePost, deletePost };
+module.exports = {
+  getPosts,
+  createPost,
+  getPostsByUserId,
+  getPost,
+  updatePost,
+  deletePost,
+};
