@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const dbConnect = require('./config/db.config');
 const authDbConnect = require('./config/auth-db.config');
+const redisClientConnection = require('./config/redis.config');
 const postRoutes = require('./routes/post.route');
 const { startUserCheckClient } = require('./events/user-check.client');
 
@@ -29,6 +30,7 @@ fastify.addHook('onClose', async () => {
   if (stopUserCheckClient) {
     await stopUserCheckClient();
   }
+  await redisClientConnection.close();
 });
 
 const start = async () => {

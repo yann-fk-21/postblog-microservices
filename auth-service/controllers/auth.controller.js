@@ -2,6 +2,9 @@ const { Auth } = require('../models/auth.model');
 const { status } = require('http-status');
 const jwt = require('jsonwebtoken');
 const { authenticateUser } = require('../events/user-auth.client');
+const redisClientConnection = require('../config/redis.config');
+
+const TOKEN_TTL_SECONDS = 60 * 60;
 
 const loginUser = async (request, reply) => {
   try {
@@ -31,6 +34,11 @@ const loginUser = async (request, reply) => {
 
     const token = jwt.sign({ sub: user.id }, secret, { expiresIn: '1h' });
     await Auth.create({ userId: user.id, token });
+
+    const client = await redisClientConnection(request.log);
+    await client.set(String(user.id), token, {
+      EX: TOKEN_TTL_SECONDS,
+    });
 
     return reply.code(status.OK).send({
       message: 'Login successful',

@@ -23,6 +23,7 @@
     "kafkajs": "^2.2.4",
     "mongoose": "^9.11.2",
     "multer": "^2.4.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "redis": "^6.3.0"
   }
 }

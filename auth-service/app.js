@@ -3,6 +3,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth.route');
 
 const dbConnect = require('./config/db.config');
+const redisClientConnection = require('./config/redis.config');
 const { startUserAuthClient } = require('./events/user-auth.client');
 
 const PORT = process.env.PORT || 7002;
@@ -19,6 +20,7 @@ fastify.addHook('onClose', async () => {
   if (stopUserAuthClient) {
     await stopUserAuthClient();
   }
+  await redisClientConnection.close();
 });
 
 const start = async () => {

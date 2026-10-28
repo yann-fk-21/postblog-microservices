@@ -4,8 +4,8 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 const { randomUUID } = require('node:crypto');
 const { status } = require('http-status');
-const { Auth } = require('../models/auth.model');
 const jwt = require('jsonwebtoken');
+const redisClientConnection = require('../config/redis.config');
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads-images');
 
@@ -139,11 +139,10 @@ const checkTokenValidity = async (reply, token) => {
       return false;
     }
 
-    const retrievedAuth = await Auth.findOne({
-      token: bearerToken,
-      userId: Number(claims.sub),
-    });
-    if (!retrievedAuth) {
+    const client = await redisClientConnection();
+    const cachedToken = await client.get(String(claims.sub));
+
+    if (cachedToken !== bearerToken) {
       unauthorized();
       return false;
     }
