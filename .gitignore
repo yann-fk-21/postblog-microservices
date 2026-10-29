@@ -10,3 +10,4 @@
 /auth-service/uploads-images
 /auth-service/.env
 
+/blogpost-gateway/node_modules

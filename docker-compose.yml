@@ -1,20 +1,93 @@
-version: '2'
 services:
   zookeeper:
     image: wurstmeister/zookeeper:latest
     ports:
       - '2181:2181'
+
   kafka:
     image: wurstmeister/kafka:2.11-1.1.1
+    depends_on:
+      - zookeeper
     ports:
       - '9092:9092'
-    links:
-      - zookeeper
     environment:
-      KAFKA_ADVERTISED_HOST_NAME: ${HOST_IP:-localhost}
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_DELETE_TOPIC_ENABLE: 'true'
       KAFKA_CREATE_TOPICS: 'topic-test:1:1'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+  user-service:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    depends_on:
+      - kafka
+    ports:
+      - '7001:7001'
+    environment:
+      PORT: 7001
+      KAFKA_BROKER: kafka:9092
+    volumes:
+      - ./user-service:/app
+      - /app/node_modules
+
+  post-service:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    env_file:
+      - ./post-service/.env
+    depends_on:
+      - kafka
+      - redis
+    ports:
+      - '7000:7000'
+    environment:
+      PORT_POST_SERVICE: 7000
+      KAFKA_BROKER: kafka:9092
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./post-service:/app
+      - /app/node_modules
+
+  auth-service:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start"
+    env_file:
+      - ./auth-service/.env
+    depends_on:
+      - kafka
+      - redis
+    ports:
+      - '7002:7002'
+    environment:
+      PORT: 7002
+      KAFKA_BROKER: kafka:9092
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+
+  blogpost-gateway:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && node server.js"
+    depends_on:
+      - user-service
+      - post-service
+      - auth-service
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./blogpost-gateway:/app
+      - /app/node_modules
