@@ -1,5 +1,5 @@
 const {
-  uploadImageToRemoteStorage,
+  uploadImageToLocalStorage,
   checkTokenValidity,
   checkAuthorization,
 } = require('../utils/utils');
@@ -129,6 +129,12 @@ const createPost = async (request, reply) => {
     }
 
     const file = await request.file();
+    if (!file) {
+      return reply
+        .code(status.BAD_REQUEST)
+        .send({ message: 'An image file is required in the "file" field' });
+    }
+
     const { title, description, userId } = Object.fromEntries(
       Object.entries(file.fields).map(([key, field]) => [key, field.value]),
     );
@@ -151,7 +157,7 @@ const createPost = async (request, reply) => {
         .send({ message: `User ${userId} is not authorized` });
     }
 
-    const imageLink = await uploadImageToRemoteStorage(file);
+    const imageLink = await uploadImageToLocalStorage(file, request.log);
 
     if (!imageLink) {
       return reply.code(status.BAD_REQUEST).send('upload image failed!');

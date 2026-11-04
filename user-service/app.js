@@ -29,6 +29,7 @@ const start = async () => {
 
     const address = await app.listen({
       port: Number(PORT),
+      host: '0.0.0.0',
     });
     app.log.info(`User service is running at ${address}`);
   } catch (error) {

@@ -1,36 +1,64 @@
 services:
   zookeeper:
     image: wurstmeister/zookeeper:latest
+    restart: unless-stopped
     ports:
       - '2181:2181'
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z localhost 2181']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
 
   kafka:
     image: wurstmeister/kafka:2.11-1.1.1
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - '9092:9092'
     environment:
       KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_ADVERTISED_PORT: 9092
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 60000
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_DELETE_TOPIC_ENABLE: 'true'
       KAFKA_CREATE_TOPICS: 'topic-test:1:1'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    restart: on-failure
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   user-service:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install && npm start"
+    restart: unless-stopped
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     ports:
       - '7001:7001'
     environment:
@@ -39,35 +67,81 @@ services:
     volumes:
       - ./user-service:/app
       - /app/node_modules
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "const s = require('node:net').connect(7001, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.users.rule=PathPrefix(`/api/v1/users`)'
+      - 'traefik.http.routers.users.entrypoints=web'
+      - 'traefik.http.services.users.loadbalancer.server.port=7001'
 
   post-service:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install && npm start"
+    restart: unless-stopped
     env_file:
       - ./post-service/.env
     depends_on:
-      - kafka
-      - redis
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
     ports:
       - '7000:7000'
     environment:
       PORT_POST_SERVICE: 7000
+      WEB_CONCURRENCY: 1
       KAFKA_BROKER: kafka:9092
       REDIS_URL: redis://redis:6379
     volumes:
       - ./post-service:/app
       - /app/node_modules
+      - post_images:/app/uploads-images
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "const s = require('node:net').connect(7000, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.posts.rule=PathPrefix(`/api/v1/posts`)'
+      - 'traefik.http.routers.posts.entrypoints=web'
+      - 'traefik.http.services.posts.loadbalancer.server.port=7000'
 
   auth-service:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install && npm start"
+    restart: unless-stopped
     env_file:
       - ./auth-service/.env
     depends_on:
-      - kafka
-      - redis
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
     ports:
       - '7002:7002'
     environment:
@@ -77,17 +151,49 @@ services:
     volumes:
       - ./auth-service:/app
       - /app/node_modules
-
-  blogpost-gateway:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "npm install && node server.js"
-    depends_on:
-      - user-service
-      - post-service
-      - auth-service
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "const s = require('node:net').connect(7002, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 30s
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.auth.rule=PathPrefix(`/api/v1/auth`)'
+      - 'traefik.http.routers.auth.entrypoints=web'
+      - 'traefik.http.services.auth.loadbalancer.server.port=7002'
+  traefik:
+    image: traefik:latest
+    restart: unless-stopped
+    command:
+      - '--api.insecure=true'
+      - '--providers.docker=true'
+      - '--providers.docker.exposedbydefault=false'
+      - '--entrypoints.web.address=:80'
     ports:
+      - '80:80'
       - '8080:8080'
     volumes:
-      - ./blogpost-gateway:/app
-      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+  # blogpost-gateway:
+  #   image: node:22-alpine
+  #   working_dir: /app
+  #   command: sh -c "npm install && node server.js"
+  #   depends_on:
+  #     - user-service
+  #     - post-service
+  #     - auth-service
+  #   ports:
+  #     - '8080:8080'
+  #   volumes:
+  #     - ./blogpost-gateway:/app
+  #     - /app/node_modules
+
+volumes:
+  post_images:

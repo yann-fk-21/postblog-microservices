@@ -9,11 +9,11 @@ const redisClientConnection = require('../config/redis.config');
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads-images');
 
-const uploadImageToLocalStorage = async (reply, file) => {
+const uploadImageToLocalStorage = async (file, logger) => {
   if (!file) {
-    return reply
-      .code(400)
-      .send({ error: 'A file is required in the "file" field' });
+    const error = new Error('A file is required in the "file" field');
+    error.statusCode = status.BAD_REQUEST;
+    throw error;
   }
 
   const filename = `${randomUUID()}${path.extname(file.filename)}`;
@@ -22,12 +22,17 @@ const uploadImageToLocalStorage = async (reply, file) => {
   await mkdir(uploadDirectory, { recursive: true });
   try {
     await pipeline(file.file, createWriteStream(filePath, { flags: 'wx' }));
+    if (file.file.truncated) {
+      const error = new Error('The uploaded file exceeds the 10 MB limit');
+      error.statusCode = status.REQUEST_ENTITY_TOO_LARGE;
+      throw error;
+    }
   } catch (error) {
     try {
       await unlink(filePath);
     } catch (cleanupError) {
       if (cleanupError.code !== 'ENOENT') {
-        request.log.error(
+        logger?.error(
           { err: cleanupError },
           'Failed to remove incomplete upload',
         );
@@ -36,14 +41,10 @@ const uploadImageToLocalStorage = async (reply, file) => {
     throw error;
   }
 
-  if (file.file.truncated) {
-    await unlink(filePath);
-    return reply
-      .code(413)
-      .send({ error: 'The uploaded file exceeds the 10 MB limit' });
-  }
-
-  return filename;
+  const baseUrl =
+    process.env.PUBLIC_BASE_URL ||
+    `http://localhost:${process.env.PORT_POST_SERVICE || 7000}`;
+  return `${baseUrl.replace(/\/+$/, '')}/uploads-images/${encodeURIComponent(filename)}`;
 };
 
 const uploadImageToRemoteStorage = async (file) => {

@@ -25,7 +25,10 @@ fastify.addHook('onClose', async () => {
 
 const start = async () => {
   try {
-    const address = await fastify.listen({ port: Number(PORT) });
+    const address = await fastify.listen({
+      port: Number(PORT),
+      host: '0.0.0.0',
+    });
     fastify.log.info(`Auth service is running at ${address}`);
   } catch (error) {
     fastify.log.error(error);
