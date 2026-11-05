@@ -40,6 +40,19 @@ services:
       retries: 12
       start_period: 120s
 
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - '8081:8080'
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -181,19 +194,6 @@ services:
       - '8080:8080'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-  # blogpost-gateway:
-  #   image: node:22-alpine
-  #   working_dir: /app
-  #   command: sh -c "npm install && node server.js"
-  #   depends_on:
-  #     - user-service
-  #     - post-service
-  #     - auth-service
-  #   ports:
-  #     - '8080:8080'
-  #   volumes:
-  #     - ./blogpost-gateway:/app
-  #     - /app/node_modules
 
 volumes:
   post_images:
