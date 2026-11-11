@@ -20,6 +20,7 @@
     "fastify-plugin": "^6.0.1",
     "http-status": "^2.1.0",
     "jsonwebtoken": "^9.0.3",
+    "k6": "^0.0.0",
     "kafkajs": "^2.2.4",
     "mongoose": "^9.11.2",
     "multer": "^2.4.0",
