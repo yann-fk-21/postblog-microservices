@@ -84,7 +84,7 @@ const start = async () => {
     fastify.log.info(`Post service is running at ${address}`);
   } catch (error) {
     fastify.log.error(error);
-    process.exitCode = 1;
+    process.exit(1);
   }
 };
 

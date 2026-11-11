@@ -1,4 +1,4 @@
-const fastify = require('fastify')();
+const fastify = require('fastify')({ logger: true });
 require('dotenv').config();
 const authRoutes = require('./routes/auth.route');
 
@@ -32,7 +32,7 @@ const start = async () => {
     fastify.log.info(`Auth service is running at ${address}`);
   } catch (error) {
     fastify.log.error(error);
-    process.exitCode = 1;
+    process.exit(1);
   }
 };
 

@@ -34,7 +34,7 @@ const start = async () => {
     app.log.info(`User service is running at ${address}`);
   } catch (error) {
     app.log.error(error);
-    process.exitCode = 1;
+    process.exit(1);
   }
 };
 
